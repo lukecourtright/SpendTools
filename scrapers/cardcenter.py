@@ -15,7 +15,7 @@ async def fetch_rates(browser: Browser) -> list[dict]:
         await page.locator('#Email').type(email)
         await page.locator('#Password').click()
         await page.locator('#Password').type(password)
-        await page.locator('button[type="submit"]').click()
+        await page.locator('button[type="submit"]:not([name="provider"])').click()
         await page.wait_for_url(lambda url: "Login" not in url, timeout=15000)
 
         await page.goto("https://cardcenter.cc/Rates")
