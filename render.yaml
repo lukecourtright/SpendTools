@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: spendtools
+    runtime: python
+    buildCommand: pip install -r requirements.txt && playwright install chromium && playwright install-deps chromium
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: QCGC_EMAIL
+        sync: false
+      - key: QCGC_PASSWORD
+        sync: false
+      - key: CARDCENTER_EMAIL
+        sync: false
+      - key: CARDCENTER_PASSWORD
+        sync: false
+      - key: ALIGNED_SESSION
+        sync: false

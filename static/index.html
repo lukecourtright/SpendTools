@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SpendTools – Gift Card Rates</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen p-4">
+
+  <div class="flex items-center justify-between mb-2">
+    <h1 class="text-2xl font-bold text-gray-800">Gift Card Rates</h1>
+    <button id="refreshBtn" onclick="refresh()"
+      class="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-sm font-semibold px-4 py-2 rounded transition">
+      Refresh Rates
+    </button>
+  </div>
+
+  <p id="lastUpdated" class="text-xs text-gray-400 mb-3">Never refreshed</p>
+
+  <!-- Error banner -->
+  <div id="errorBanner" class="hidden bg-red-50 border border-red-200 text-red-700 text-sm rounded p-3 mb-4"></div>
+
+  <!-- Search -->
+  <div class="mb-3">
+    <input id="searchInput" type="text" placeholder="Search brands…" oninput="applyFiltersAndSort()"
+      class="w-full max-w-sm px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+  </div>
+
+  <!-- Table -->
+  <div class="overflow-x-auto rounded-lg shadow">
+    <table class="min-w-full bg-white text-sm">
+      <thead class="bg-gray-800 text-white select-none">
+        <tr>
+          <th class="px-4 py-3 text-left cursor-pointer hover:bg-gray-700" onclick="sortBy('brand')">
+            Brand <span id="sort-brand"></span>
+          </th>
+          <th class="px-4 py-3 text-right cursor-pointer hover:bg-gray-700" onclick="sortBy('denomination')">
+            Denom <span id="sort-denomination"></span>
+          </th>
+          <th class="px-4 py-3 text-right cursor-pointer hover:bg-gray-700" onclick="sortBy('qcgc')">
+            QCGC <span id="sort-qcgc"></span>
+          </th>
+          <th class="px-4 py-3 text-right cursor-pointer hover:bg-gray-700" onclick="sortBy('cardcenter')">
+            Cardcenter <span id="sort-cardcenter"></span>
+          </th>
+          <th class="px-4 py-3 text-right cursor-pointer hover:bg-gray-700" onclick="sortBy('aligned')">
+            Aligned <span id="sort-aligned"></span>
+          </th>
+        </tr>
+      </thead>
+      <tbody id="tableBody" class="divide-y divide-gray-200">
+        <tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">Press "Refresh Rates" to load current rates.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    let allRates = [];
+    let sortCol = 'brand';
+    let sortDir = 1; // 1 = asc, -1 = desc
+
+    async function refresh() {
+      const btn = document.getElementById('refreshBtn');
+      btn.disabled = true;
+      btn.textContent = 'Fetching…';
+      document.getElementById('errorBanner').classList.add('hidden');
+
+      try {
+        const res = await fetch('/api/refresh', { method: 'POST' });
+        if (!res.ok) throw new Error(`Server error ${res.status}`);
+        const data = await res.json();
+        ingestData(data);
+      } catch (err) {
+        showError('Refresh failed: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Refresh Rates';
+      }
+    }
+
+    async function loadCached() {
+      try {
+        const res = await fetch('/api/rates');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.rates && data.rates.length) ingestData(data);
+      } catch {}
+    }
+
+    function ingestData(data) {
+      if (data.last_updated) {
+        const d = new Date(data.last_updated);
+        document.getElementById('lastUpdated').textContent =
+          'Last updated: ' + d.toLocaleString();
+      }
+      if (data.errors && data.errors.length) {
+        showError('Some sources had errors: ' + data.errors.join(' | '));
+      }
+      allRates = data.rates || [];
+      applyFiltersAndSort();
+    }
+
+    function applyFiltersAndSort() {
+      const q = document.getElementById('searchInput').value.trim().toLowerCase();
+      let rows = q ? allRates.filter(r => r.brand.toLowerCase().includes(q)) : allRates;
+
+      rows = [...rows].sort((a, b) => {
+        let av = a[sortCol], bv = b[sortCol];
+        // Nulls always go to bottom regardless of direction
+        if (av === null || av === undefined) return 1;
+        if (bv === null || bv === undefined) return -1;
+        if (typeof av === 'string') return sortDir * av.localeCompare(bv);
+        return sortDir * (av - bv);
+      });
+
+      renderRows(rows);
+    }
+
+    function sortBy(col) {
+      if (sortCol === col) {
+        sortDir *= -1;
+      } else {
+        sortCol = col;
+        sortDir = 1;
+      }
+      updateSortIndicators();
+      applyFiltersAndSort();
+    }
+
+    function updateSortIndicators() {
+      const cols = ['brand', 'denomination', 'qcgc', 'cardcenter', 'aligned'];
+      cols.forEach(col => {
+        const el = document.getElementById('sort-' + col);
+        if (col === sortCol) {
+          el.textContent = sortDir === 1 ? '▲' : '▼';
+        } else {
+          el.textContent = '';
+        }
+      });
+    }
+
+    function renderRows(rates) {
+      const tbody = document.getElementById('tableBody');
+
+      if (!rates.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-400">No matching rates.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = '';
+      rates.forEach(row => {
+        const vals = [row.qcgc, row.cardcenter, row.aligned];
+        const nums = vals.filter(v => v !== null && !isNaN(v));
+        const best = nums.length > 1 ? Math.max(...nums) : null;
+
+        const cell = v => {
+          const isBest = v !== null && !isNaN(v) && v === best;
+          const display = v === null || v === undefined ? '—' : parseFloat(v).toFixed(2) + '%';
+          const cls = isBest ? 'bg-green-100 text-green-800 font-bold' : 'text-gray-700';
+          return `<td class="px-4 py-3 text-right ${cls}">${display}</td>`;
+        };
+
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-gray-50';
+        tr.innerHTML = `
+          <td class="px-4 py-3 font-medium text-gray-800">${esc(row.brand)}</td>
+          <td class="px-4 py-3 text-right text-gray-500">$${Number(row.denomination).toLocaleString()}</td>
+          ${cell(row.qcgc)}
+          ${cell(row.cardcenter)}
+          ${cell(row.aligned)}`;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('errorBanner');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+    }
+
+    function esc(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    updateSortIndicators();
+    loadCached();
+  </script>
+</body>
+</html>

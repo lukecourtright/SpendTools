@@ -1,0 +1,6 @@
+.env
+__pycache__/
+*.pyc
+.playwright/
+.chrome_profile/
+aligned_session.json
