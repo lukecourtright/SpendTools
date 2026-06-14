@@ -62,7 +62,10 @@ async def refresh():
     errors = []
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
+        browser = await p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-setuid-sandbox"],
+        )
         qcgc_r, cc_r, aligned_r = await asyncio.gather(
             fetch_qcgc(browser),
             fetch_cardcenter(browser),

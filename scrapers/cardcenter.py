@@ -11,10 +11,12 @@ async def fetch_rates(browser: Browser) -> list[dict]:
         password = os.environ["CARDCENTER_PASSWORD"]
         await page.goto("https://cardcenter.cc/Account/Login")
         await page.wait_for_load_state("networkidle")
-        await page.fill('#Email', email)
-        await page.fill('#Password', password)
-        await page.click('button[type="submit"]')
-        await page.wait_for_load_state("networkidle")
+        await page.locator('#Email').click()
+        await page.locator('#Email').type(email)
+        await page.locator('#Password').click()
+        await page.locator('#Password').type(password)
+        await page.locator('button[type="submit"]').click()
+        await page.wait_for_url(lambda url: "Login" not in url, timeout=15000)
 
         await page.goto("https://cardcenter.cc/Rates")
         await page.wait_for_load_state("networkidle")
